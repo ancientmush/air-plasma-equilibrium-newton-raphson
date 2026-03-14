@@ -7,31 +7,23 @@ program plot
     integer, parameter :: data = 60
     integer :: k, l
 #ifdef USE_CUSTOM_VALUE
-    real(real64), parameter :: no = VAL_NO, nn = VAL_NN !どうやって明示的に倍精度として定義する?
+    real(real64), parameter :: no = real(VAL_NO, kind=real64), nn = real(VAL_NN, kind=real64)
 #else
     real(real64), parameter :: no = 78.0_real64, nn = 21.0_real64
 #endif
     character(len=64) :: ratio
 
-    write (pressure, '(F4.2, "atm")') P_atm
     write (ratio, '(I0, A, I0)') nint(no), "v", nint(nn)
-    print *, ratio
 
-    !print *, pressure
-    do k = 1, 3
-        call replace_deci_point(pressure(k))
-    end do
-    !print *, pressure
-
-    ! do k = 1, size(pressure)
-    !     pressure(k) = remove_char(pressure(k), '.')
-    ! end do
+    pressure = period_to_p(P_atm)
 
     do l = 1, 3
-        open (unit=10, file=trim(pressure(l))//trim(ratio)//'.dat', status='replace')
+        pressure(l) = trim(pressure(l))//"atm"
+        open (unit=10, file='../output/'//trim(pressure(l))//trim(ratio)//'.dat', status='replace')
         write (10, '(I2)') data
         close (10)
     end do
+
 contains
     function remove_char(input_char, char_to_remove) result(output_char)
         character(len=*), intent(in) :: input_char
@@ -60,18 +52,19 @@ contains
         end do
     end function remove_char
 
-    subroutine replace_deci_point(input_char)
-        character(len=*), intent(inout) :: input_char
+    elemental function period_to_p(val) result(res)
+        real(real64), intent(in) :: val
+        character(len=10) :: res
         integer :: pos
 
-        pos = index(trim(input_char), ".")
+        write (res, '(F10.2)') val
+        res = adjustl(res)
 
+        pos = index(res, ".")
         if (pos > 0) then
-            input_char(pos:pos) = "p"
+            res(pos:pos) = "p"
         end if
 
-        input_char = trim(input_char)
-
-    end subroutine replace_deci_point
+    end function period_to_p
 end program plot
 
