@@ -19,10 +19,11 @@ program main
     type(imolecule) :: op2, np2
     type(compound) :: no
 
+    ! Storing data from mod_constants to types defined in mod_types.
     call init()
-
     call data_storing()
 
+    ! Calculating equilibrium constants and write into a file "k_test.dat".
     allocate (kp(size(T), k - 3))
     kp(:, 1) = no%kps(T)
     kp(:, 2) = o2%kps(T)
@@ -51,6 +52,8 @@ program main
         close (30)
         deallocate (p)
     end do
+
+    deallocate (kp)
 
 contains
     subroutine data_storing()
