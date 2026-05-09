@@ -8,9 +8,9 @@ BINDIR = bin
 BUILD ?= release
 
 ifeq ($(BUILD), debug)
-	FFLAGS = -O0 -g -check all -traceback -fpe0 -qmkl -module $(BUILDDIR) -I$(BUILDDIR)
+    FFLAGS = -O0 -g -check all -traceback -fpe0 -qmkl -module $(BUILDDIR) -I$(BUILDDIR)
 else
-	FFLAGS = -O3 -Warn all -xHOST -qmkl -module $(BUILDDIR) -I$(BUILDDIR)
+    FFLAGS = -O3 -Warn all -xHOST -qmkl -module $(BUILDDIR) -I$(BUILDDIR)
 endif
 
 
