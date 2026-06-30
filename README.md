@@ -4,15 +4,15 @@ A Fortran-based program to calculate the chemical equilibrium composition of hig
 
 ## Introduction
 
-This project simulates the chemical equilibrium composition of high-temperature air plasma (from 298.15 K up to 20,000 K) under varying pressures. It models the thermodynamic properties of 11 chemical species and solves the non-linear system of chemical equilibrium and mass/charge conservation equations.
+This project simulates the chemical equilibrium composition of high-temperature air plasma (from 298.15 K up to 20,000 K) under varying pressures. It models the thermodynamic properties of 11 chemical species based on NASA 9-coefficients polynomial data and solves the resulting nonlinear equilibrium system.
 
-The solver utilizes a log-transformed damped Newton-Raphson method with a backtracking line search (Armijo condition) to guarantee convergence even at lower temperatures where equilibrium constants span many orders of magnitude. Linear algebra system solving at each iteration is offloaded to LAPACK via Intel MKL.
+The solver utilizes a log-transformed damped Newton-Raphson method with a backtracking line search (Armijo condition) to guarantee convergence even at lower temperatures where equilibrium constants become stiff.
 
 ## Thermodynamic Modeling
 
 ### NASA 9-Coefficients Polynomials
 
-Thermodynamic properties (specific heat $C_p^\circ$, enthalpy $H^\circ$, and entropy $S^\circ$) for each species are evaluated using the NASA 9-coefficients polynomial fit. The coefficients are partitioned into three temperature intervals (200K–1000K, 1000K–6000K, and 6000K–20000K) sourced from the NASA CEA database (derived from `thermo.inp`).
+Thermodynamic properties (specific heat $C_p^\circ$, enthalpy $H^\circ$, and entropy $S^\circ$) for each species are evaluated using the NASA 9-coefficients polynomial fit. The coefficients are parsed from `src/mod_constants.f90`.
 
 The non-dimensional equations are:
 
@@ -40,7 +40,7 @@ The non-dimensional equations are:
   G^\circ = RT \left( \frac{H^\circ}{RT} - \frac{S^\circ}{R} \right)
   $$
 
-Where $a_1 \dots a_7$ are the polynomial coefficients, and $b_1, b_2$ are integration constants. These parameters are stored in `src/mod_constants.f90`.
+Where $a_1, \dots, a_7$ are the polynomial coefficients, and $b_1, b_2$ are integration constants. These parameters are stored in `src/mod_constants.f90`.
 
 ## Chemical Equilibrium System
 
@@ -62,7 +62,7 @@ The plasma is assumed to consist of 11 species:
 
 ### Governing Equations
 
-To find the equilibrium composition (partial pressures $P_i$), we solve a system of 11 equations consisting of 8 chemical equilibrium constraints, 1 total pressure constraint, 1 charge neutrality constraint, and 1 mass conservation constraint for the Nitrogen-to-Oxygen ratio.
+To find the equilibrium composition (partial pressures $P_i$), we solve a system of 11 equations consisting of 8 chemical equilibrium constraints, 1 total pressure constraint, 1 charge neutrality equation, and 1 elemental composition constraint.
 
 1. **Oxygen Cleavage:** $O_2 \rightleftharpoons 2O$
 
@@ -120,17 +120,17 @@ To find the equilibrium composition (partial pressures $P_i$), we solve a system
 
 10. **Charge Neutrality**
 
-   $$
-   P_{e^-} = P_{O^+} + P_{N^+} + P_{O_2^+} + P_{N_2^+} + P_{NO^+}
-   $$
+    $$
+    P_{e^-} = P_{O^+} + P_{N^+} + P_{O_2^+} + P_{N_2^+} + P_{NO^+}
+    $$
 
 11. **Nitrogen-to-Oxygen Ratio** (mass conservation, approx. 78:21)
 
-   $$
-   \frac{N_N}{N_O} = \frac{78}{21} \implies 78 \cdot N_O - 21 \cdot N_N = 0
-   $$
+    $$
+    \frac{N_N}{N_O} = \frac{78}{21} \implies 78 \cdot N_O - 21 \cdot N_N = 0
+    $$
 
-   Where $N_O$ and $N_N$ are the total abundance of oxygen and nitrogen atoms across all species.
+    Where $N_O$ and $N_N$ are the total abundance of oxygen and nitrogen atoms across all species.
 
 ## Numerical Solver
 
@@ -144,7 +144,7 @@ This transformation ensures that $P_i$ remains strictly positive and improves th
 
 ### Continuation Method & OpenMP Parallelization
 
-To drastically accelerate convergence, the solver employs a continuation method: after the first temperature step, the converged solution from the previous temperature is used as the initial guess for the next. This reduces the required Newton-Raphson iterations to just 1-3 per temperature step.
+To drastically accelerate convergence, the solver employs a continuation method: after the first temperature step, the converged solution from the previous temperature is used as the initial guess for the next temperature.
 
 Furthermore, the outer loop over varying atmospheric pressures is completely parallelized using OpenMP, distributing the independent computation paths across all available CPU cores.
 
@@ -227,7 +227,7 @@ Run the compiled binary:
 This will calculate:
 
 1. The equilibrium constants for all species at different temperatures (outputted to `output/k_test.dat`).
-2. The partial pressures (mole fractions) for atmospheric pressures of 1.0, 0.1, and 0.01 atm across temperatures 298.15 K to 20,000 K. The results are automatically saved to dynamically named, separated output files incorporating the pressure and gas ratio (e.g. `output/1p00atm78v21.dat`, `output/0p10atm78v21.dat`).
+2. The partial pressures (mole fractions) for atmospheric pressures of 1.0, 0.1, and 0.01 atm across temperatures 298.15 K to 20,000 K. The results are automatically saved to dynamically named, structured `.dat` files.
 
 ### Plotting Results
 
@@ -244,7 +244,7 @@ This plots the species distribution over the temperature range [0:20000] K.
 
 ### Object-Oriented Refactoring & Encapsulation
 
-Refactor the Newton-Raphson solver and backtracking line search routines into clean Fortran modules. Target complete encapsulation of solver parameters, Jacobians, and residual state variables in object-oriented structures (derived types) to reduce global/module variables.
+Refactor the Newton-Raphson solver and backtracking line search routines into clean Fortran modules. Target complete encapsulation of solver parameters, Jacobians, and residual state variables into dedicated derived types.
 
 ### Solver Customization
 
