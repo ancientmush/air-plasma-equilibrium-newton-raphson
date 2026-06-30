@@ -61,32 +61,7 @@ contains
              & - no * (ep(2) + ep(3) + 2 * ep(5) + ep(7) + 2 * ep(9) + ep(10))
     end function func
 
-    function func_rss(num, PP, nn, no, p, KK, fun) result(r)
-        integer, intent(in) :: num
-        real(dp), intent(in) :: PP
-        real(dp), intent(in) :: nn, no
-        real(dp), intent(in) :: p(num)
-        real(dp), intent(in) :: KK(3:num - 1)
-        interface
-            function fun(number, d, e1, e2, g, h) result(res)
-                import :: dp
-                implicit none(type, external)
-                integer, intent(in) :: number
-                real(dp), intent(in) :: d
-                real(dp), intent(in) :: e1, e2
-                real(dp), intent(in) :: g(number)
-                real(dp), intent(in) :: h(number - 3)
-                real(dp) ::res(number)
-            end function fun
-        end interface
-        real(dp) :: r
-        real(dp) :: fu(num)
-
-        !fu(:) = func(num, p, KK)
-        r = 1 / 2 * (norm2(fun(num, PP, nn, no, p, KK)))**2
-    end function func_rss
-
-    subroutine backtracking(num, PP, nn, no, p_old, KK, delta_p, fu, beta, c, fun, fun_r, jac) !rateを返す
+    subroutine backtracking(num, PP, nn, no, p_old, KK, delta_p, fu, beta, c)
         integer, intent(in) :: num
         real(dp), intent(in) :: PP
         real(dp), intent(in) :: nn, no
@@ -95,66 +70,24 @@ contains
         real(dp), intent(in) :: delta_p(num)
         real(dp), intent(in) :: fu(num)
         real(dp), intent(in) :: beta
-        real(dp), intent(inout) :: c
-        interface
-            function fun(number, d, e1, e2, g, h) result(res)
-                import :: dp
-                implicit none(type, external)
-                integer, intent(in) :: number
-                real(dp), intent(in) :: d
-                real(dp), intent(in) :: e1, e2
-                real(dp), intent(in) :: g(number)
-                real(dp), intent(in) :: h(number - 3)
-                real(dp) :: res(number)
-            end function fun
-            function fun_r(numberr, dd, ee1, ee2, gg, hh, fun) result(res1)
-                import :: dp
-                implicit none(type, external)
-                integer, intent(in) :: numberr
-                real(dp), intent(in) :: dd
-                real(dp), intent(in) :: ee1, ee2
-                real(dp), intent(in) :: gg(numberr)
-                real(dp), intent(in) :: hh(numberr - 3)
-                interface
-                    function fun(nummer, u, v1, v2, w, z) result(resl)
-                        import :: dp
-                        implicit none(type, external)
-                        integer, intent(in) :: nummer
-                        real(dp), intent(in) :: u
-                        real(dp), intent(in) :: v1, v2
-                        real(dp), intent(in) :: w(nummer)
-                        real(dp), intent(in) :: z(nummer - 3)
-                        real(dp) :: resl(nummer)
-                    end function fun
-                end interface
-                real(dp) :: res1
-            end function fun_r
-            function jac(numel, eee1, eee2, ggg, hhh) result(res2)
-                import :: dp
-                implicit none(type, external)
-                integer, intent(in) :: numel
-                real(dp), intent(in) :: eee1, eee2
-                real(dp), intent(in) :: ggg(numel)
-                real(dp), intent(in) :: hhh(numel - 3)
-                real(dp) :: res2(numel, numel)
-            end function jac
-        end interface
-        integer :: l
-        real(dp) :: p_new(num), f_new(num), j_new(num, num)
-        real(dp) :: rss_old, rss_new
+        real(dp), intent(out) :: c
 
-        rss_old = fun_r(num, PP, nn, no, p_old, KK, fun)
-        l = 0
-        c = beta**0 !Start with 1.
-        do while (.not. rss_new <= rss_old - c1 * c * (norm2(fu))**2)
-            !print *, c
+        real(dp) :: p_new(num), f_new(num)
+        real(dp) :: rss_old, rss_new, dir_deriv
+
+        rss_old = 0.5_dp * norm2(fu)**2
+        dir_deriv = -2.0_dp * rss_old
+
+        c = 1.0_dp
+        do
             p_new = p_old + c * delta_p
-            rss_new = fun_r(num, PP, nn, no, p_new, KK, fun)
-            f_new = fun(num, PP, nn, no, p_new, KK)
-            j_new = jac(num, nn, no, p_new, KK)
-            if (dot_product(matmul(f_new, j_new), delta_p) <= c2 * 2.0_dp * rss_old) exit
-            l = l + 1
-            c = beta**l
+            f_new = func(num, PP, nn, no, p_new, KK)
+            rss_new = 0.5_dp * norm2(f_new)**2
+
+            if (rss_new <= rss_old + c1 * c * dir_deriv) exit
+
+            c = c * beta
+            if (c < 1.0e-10_dp) exit
         end do
     end subroutine backtracking
 
@@ -166,7 +99,7 @@ contains
         real(dp), intent(in) :: P_atm
         real(dp), intent(in) :: Nn, No
 
-        real(dp), intent(out) :: x(n)
+        real(dp), intent(inout) :: x(n)
         real(dp) :: dx(n)
         real(dp) :: jacb(n, n)
         real(dp) :: f(n)
@@ -179,44 +112,31 @@ contains
         integer :: i
 
         newrap_loop: do i = 1, max_iter
-
-            !call calc_f(n, P_atm, Nn, No, x, f, K)
             f = func(n, P_atm, Nn, No, x, K)
-            !print *, i
-            !print *, f
 
             if (maxval(abs(f)) < err) then
-                !print *, i
-                !print *, x
-                print *, "Converged at loop = ", i - 1
-                print *, exp(x)
+                ! print *, "Converged at loop = ", i - 1
                 return
             end if
 
-            !call jacub(n, Nn, No, x, jacb, K)
             jacb(:, :) = jacob(n, Nn, No, x, K)
-
             dx = -f
-            !print *, "--- loop = ", i, " ---"
-            !print *, "Max F   = ", maxval(abs(f))
-            !print *, "Max Jac = ", maxval(abs(jacb))
+
             call dgesv(n, 1, jacb, n, ipiv, dx, n, info)
 
             if (info /= 0) then
                 write (stderr, *) "Error: LAPACK DGESV failed with info = ", info
-                !exit newrap_loop
                 return
             end if
 
-            call backtracking(n, P_atm, Nn, No, x, K, dx, f, rate, alpha, func, func_rss, jacob)
+            if (maxval(abs(dx)) > 10.0_dp) then
+                dx = dx * (10.0_dp / maxval(abs(dx)))
+            end if
+
+            call backtracking(n, P_atm, Nn, No, x, K, dx, f, rate, alpha)
 
             x = x + alpha * dx
-
-            f(:) = 0.0_dp
-            jacb(:, :) = 0.0_dp
         end do newrap_loop
-        !print *, "loop = ", i - 1
-        !print *, sum(exp(x))
 
         print *, "Loop reached maximam iteration without convergence."
     end subroutine main_loop

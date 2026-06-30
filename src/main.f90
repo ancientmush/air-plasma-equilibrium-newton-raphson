@@ -7,7 +7,7 @@ program main
     integer :: i, j, l
     integer, parameter :: k = 11
     integer, parameter :: max_iter = 10000
-    real(real64), parameter :: erro = 1.0d-25
+    real(real64), parameter :: erro = 1.0d-10
     real(real64), parameter :: Patm(3) = [real(real64) :: 1.0, 0.1, 0.01]
     real(real64), parameter :: ratio_N = 78.0_real64, ratio_O = 21.0_real64
     real(real64), allocatable :: kp(:, :)
