@@ -1,7 +1,5 @@
 # Numerical Analysis on Equilibrium Composition of Air Plasma
 
-**Author:** Wataru Furutaka
-
 A Fortran-based program to calculate the chemical equilibrium composition of high-temperature air plasma using Gibbs free energy minimization and a damped Newton-Raphson method with backtracking line search.
 
 ## Introduction
