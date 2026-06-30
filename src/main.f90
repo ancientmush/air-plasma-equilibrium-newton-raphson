@@ -4,7 +4,10 @@ program main
     use newton_raphson, only: main_loop
 
     implicit none(type, external)
-    integer :: i, j, l
+    integer :: i, j, l, u
+    character(len=256) :: filename
+    character(len=64) :: ratio
+    character(len=10) :: pressure_str
     integer, parameter :: k = 11
     integer, parameter :: max_iter = 10000
     real(real64), parameter :: erro = 1.0d-10
@@ -23,6 +26,8 @@ program main
     call init()
     call data_storing()
 
+    write (ratio, "(I0, A, I0)") nint(ratio_N), "v", nint(ratio_O)
+
     ! Calculating equilibrium constants and write into a file "k_test.dat".
     allocate (kp(size(T), k - 3))
     kp(:, 1) = no%kps(T)
@@ -34,22 +39,24 @@ program main
     kp(:, 7) = np2%kps(T)
     kp(:, 8) = nop%kps(T)
 
-    open (10, file='output/k_test.dat', status='replace')
+    open (10, file="output/k_test.dat", status="replace")
     do i = 1, size(T)
-        write (10, '(f8.2,11E16.8)') T(i), (kp(i, j), j=1, 8)
+        write (10, "(f8.2,11E16.8)") T(i), (kp(i, j), j=1, 8)
     end do
     close (10)
 
     do l = 1, size(Patm)
         allocate (p(size(T), k))
-        open (30, file='output/pressure_test.dat', status='replace')
+        pressure_str = period_to_p(Patm(l))
+        write (filename, '("output/", A, "atm", A, ".dat")') trim(pressure_str), trim(ratio)
+        open (newunit=u, file=trim(filename), status="replace")
         do i = 1, size(T)
             p(i, :) = Patm(l)
             print *, 'T=', T(i)
             call main_loop(k, max_iter, erro, Patm(l), ratio_N, ratio_O, p(i, :), Kp(i, :))
-            write (30, '(f8.2, 1x, 11E16.8E3)') T(i), (exp(p(i, j)) / Patm(l), j=1, 11)
+            write (u, "(f8.2, 1x, 11E16.8E3)") T(i), (exp(p(i, j)) / Patm(l), j=1, 11)
         end do
-        close (30)
+        close (u)
         deallocate (p)
     end do
 
@@ -96,4 +103,18 @@ contains
         nop%other_used_species(2)%g_used = o%g
         nop%other_used_species(3)%g_used = n%g
     end subroutine data_storing
+
+    elemental function period_to_p(val) result(res)
+        real(real64), intent(in) :: val
+        character(len=10) :: res
+        integer :: pos
+
+        write (res, "(F10.2)") val
+        res = adjustl(res)
+
+        pos = index(res, ".")
+        if (pos > 0) then
+            res(pos:pos) = "p"
+        end if
+    end function period_to_p
 end program main
