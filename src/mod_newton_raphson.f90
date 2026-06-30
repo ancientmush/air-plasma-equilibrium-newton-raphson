@@ -89,7 +89,7 @@ contains
         res(4) = log(KK(6)) - p(6) - p(11) + p(1)
         res(5) = log(KK(7)) - p(7) - p(11) + p(2)
         res(6) = log(KK(8)) - p(8) - p(11) + 2 * p(1)
-        res(7) = log(KK(5)) - p(9) - p(11) + 2 * p(2)
+        res(7) = log(KK(9)) - p(9) - p(11) + 2 * p(2)
         res(8) = log(KK(10)) - p(10) - p(11) + p(1) + p(2)
         res(9) = PP - sum(exp(p))
         res(10) = exp(p(11)) - sum(exp(p(6:10)))
