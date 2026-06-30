@@ -87,28 +87,50 @@ The plasma is assumed to consist of 11 species:
 To find the equilibrium composition (partial pressures $P_i$), we solve a system of 11 equations consisting of 8 chemical equilibrium constraints, 1 total pressure constraint, 1 charge neutrality constraint, and 1 mass conservation constraint for the Nitrogen-to-Oxygen ratio.
 
 1.  **Oxygen Cleavage**: $O_2 \rightleftharpoons 2O$
-	$$K_{p, \text{O}_{2}} P_{\text{O}_{2}} = P_{\text{O}}^2$$
+```math
+K_{p, \text{O}_{2}} P_{\text{O}_{2}} = P_{\text{O}}^{2}
+```
 2.  **Nitrogen Cleavage**: $N_2 \rightleftharpoons 2N$
-	$$K_{p, \text{N}_{2}} P_{\text{N}_{2}} = P_{\text{N}}^2$$
+```math
+K_{p, \text{N}_{2}} P_{\text{N}_{2}} = P_{\text{N}}^2
+```
 3.  **NO Dissociation**: $NO \rightleftharpoons N + O$
-	$$K_{p, \text{NO}} P_{\text{NO}} = P_{\text{N}} P_{\text{O}}$$
+```math
+K_{p, \text{NO}} P_{\text{NO}} = P_{\text{N}} P_{\text{O}}
+```
 4.  **Oxygen Ionization**: $O^+ + e^- \rightleftharpoons O$
-	$$K_{p, \text{O}^+} P_{\text{O}^+} P_{e^-} = P_{\text{O}}$$
+```math
+K_{p, \text{O}^+} P_{\text{O}^+} P_{e^-} = P_{\text{O}}
+```
 5.  **Nitrogen Ionization**: $N^+ + e^- \rightleftharpoons N$
-	$$K_{p, \text{N}^+} P_{\text{N}^+} P_{e^-} = P_{\text{N}}$$
+```math
+K_{p, \text{N}^+} P_{\text{N}^+} P_{e^-} = P_{\text{N}}
+```
 6.  **Oxygen Molecule Ionization**: $O_2^+ + e^- \rightleftharpoons 2O$
-	$$K_{p, \text{O}_{2}^{+}} P_{\text{O}_{2}^{+}} P_{e^-} = P_{\text{O}}^{2}$$
+```math
+K_{p, \text{O}_{2}^{+}} P_{\text{O}_{2}^{+}} P_{e^-} = P_{\text{O}}^{2}
+```
 7.  **Nitrogen Molecule Ionization**: $N_2^+ + e^- \rightleftharpoons 2N$
-	$$K_{p, \text{N}_{2}^{+}} P_{\text{N}_{2}^{+}} P_{e^{-}} = P_{\text{N}}^{2}$$
+```math
+K_{p, \text{N}_{2}^{+}} P_{\text{N}_{2}^{+}} P_{e^{-}} = P_{\text{N}}^{2}
+```
 8.  **NO Ionization**: $NO^+ + e^- \rightleftharpoons N + O$
-	$$K_{p, \text{NO}^+} P_{\text{NO}^+} P_{e^-} = P_{\text{N}} P_{\text{O}}$$
+```math
+K_{p, \text{NO}^+} P_{\text{NO}^+} P_{e^-} = P_{\text{N}} P_{\text{O}}
+```
 9.  **Total Pressure Constraint**:
-	$$P_{\text{tot}} = \sum_{i=1}^{11} P_i$$
+```math
+P_{\text{tot}} = \sum_{i=1}^{11} P_i
+```
 10. **Charge Neutrality**:
-	$$P_{e^{-}} = P_{\text{O}^{+}} + P_{\text{N}^{+}} + P_{\text{O}_{2}^{+}} + P_{\text{N}_{2}^{+}} + P_{\text{NO}^{+}}$$
+```math
+P_{e^{-}} = P_{\text{O}^{+}} + P_{\text{N}^{+}} + P_{\text{O}_{2}^{+}} + P_{\text{N}_{2}^{+}} + P_{\text{NO}^{+}}
+```
 11. **Nitrogen-to-Oxygen Ratio** (mass conservation, approx. 78:21):
-	$$\frac{N_{\text{N}}}{N_{\text{O}}} = \frac{78}{21} \implies 78 \cdot N_{\text{O}} - 21 \cdot N_{\text{N}} = 0$$
-	Where $N_{\text{O}}$ and $N_{\text{N}}$ are the total abundance of oxygen and nitrogen atoms across all species.
+```math
+\frac{N_{\text{N}}}{N_{\text{O}}} = \frac{78}{21} \implies 78 \cdot N_{\text{O}} - 21 \cdot N_{\text{N}} = 0
+```
+Where $N_{\text{O}}$ and $N_{\text{N}}$ are the total abundance of oxygen and nitrogen atoms across all species.
 
 
 <a id="org55d34fe"></a>
