@@ -45,6 +45,7 @@ program main
     end do
     close (10)
 
+    !$omp parallel do private(l, i, j, p, filename, u, pressure_str)
     do l = 1, size(Patm)
         allocate (p(size(T), k))
         pressure_str = period_to_p(Patm(l))
@@ -59,6 +60,7 @@ program main
         close (u)
         deallocate (p)
     end do
+    !$omp end parallel do
 
     deallocate (kp)
 
