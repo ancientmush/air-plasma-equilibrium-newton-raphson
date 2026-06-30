@@ -52,8 +52,11 @@ program main
         write (filename, '("output/", A, "atm", A, ".dat")') trim(pressure_str), trim(ratio)
         open (newunit=u, file=trim(filename), status="replace")
         do i = 1, size(T)
-            p(i, :) = Patm(l)
-            print *, 'T=', T(i)
+            if (i == 1) then
+                p(i, :) = log(Patm(l) / real(k, real64))
+            else
+                p(i, :) = p(i - 1, :)
+            end if
             call main_loop(k, max_iter, erro, Patm(l), ratio_N, ratio_O, p(i, :), Kp(i, :))
             write (u, "(f8.2, 1x, 11E16.8E3)") T(i), (exp(p(i, j)) / Patm(l), j=1, 11)
         end do
