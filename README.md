@@ -1,180 +1,157 @@
-# Numerical Analysis on Equilibrium Composition of Air Plasma
+- [Introduction](#orgd9714ad)
+- [Thermodynamic Modeling](#org35eb9e4)
+  - [NASA 9-Coefficients Polynomials](#orge77565d)
+- [Chemical Equilibrium System](#orgf40e2bb)
+  - [Governing Equations](#org6e7bfd0)
+- [Numerical Solver](#org55d34fe)
+  - [Continuation Method & OpenMP Parallelization](#org1d258a3)
+  - [Damped Newton-Raphson Method](#orgdbcd308)
+  - [Backtracking Line Search (Armijo Rule)](#org2b4b5e5)
+- [Directory Structure](#org3fea0e2)
+- [Building and Running](#org170e24b)
+  - [Prerequisites](#orgebe7539)
+  - [Compiling](#org3ff2fec)
+  - [Running the Simulation](#orgbaee32f)
+  - [Plotting Results](#org90a709f)
+- [Planned Features & Future Enhancements](#org0d4a069)
+  - [Object-Oriented Refactoring & Encapsulation](#org8b04753)
+  - [Solver Customization](#orgcf7a1c3)
+  - [Dynamic Gas Composition](#org5e070d1)
+  - [Output Formatting](#org257a155)
+  - [Logging and Diagnostics](#orgc6657b0)
 
-A Fortran-based program to calculate the chemical equilibrium composition of high-temperature air plasma using Gibbs free energy minimization and a damped Newton-Raphson method with backtracking line [...]
 
-## Introduction
 
-This project simulates the chemical equilibrium composition of high-temperature air plasma (from 298.15 K up to 20,000 K) under varying pressures. It models the thermodynamic properties of 11 chemical[...]
+<a id="orgd9714ad"></a>
 
-The solver utilizes a log-transformed damped Newton-Raphson method with a backtracking line search (Armijo condition) to guarantee convergence even at lower temperatures where equilibrium constants be[...]
+# Introduction
 
-## Thermodynamic Modeling
+This project simulates the chemical equilibrium composition of high-temperature air plasma (from 298.15 K up to 20,000 K) under varying pressures. It models the thermodynamic properties of 11 chemical species and solves the non-linear system of chemical equilibrium and mass/charge conservation equations.  
 
-### NASA 9-Coefficients Polynomials
+The solver utilizes a log-transformed Damped Newton-Raphson method with a backtracking line search (Armijo condition) to guarantee convergence even at lower temperatures where equilibrium constants span many orders of magnitude. Linear algebra system solving at each iteration is offloaded to LAPACK via Intel MKL.  
 
-Thermodynamic properties (specific heat $C_p^\circ$, enthalpy $H^\circ$, and entropy $S^\circ$) for each species are evaluated using the NASA 9-coefficients polynomial fit. The coefficients are parsed[...]
 
-The non-dimensional equations are:
+<a id="org35eb9e4"></a>
 
-- **Specific Heat**
+# Thermodynamic Modeling
 
-  $$
-  \frac{C_p^\circ}{R} = a_1 T^{-2} + a_2 T^{-1} + a_3 + a_4 T + a_5 T^2 + a_6 T^3 + a_7 T^4
-  $$
 
-- **Enthalpy**
+<a id="orge77565d"></a>
 
-  $$
-  \frac{H^\circ}{RT} = -a_1 T^{-2} + a_2 T^{-1} \ln T + a_3 + \frac{a_4}{2} T + \frac{a_5}{3} T^2 + \frac{a_6}{4} T^3 + \frac{a_7}{5} T^4 + \frac{b_1}{T}
-  $$
+## NASA 9-Coefficients Polynomials
 
-- **Entropy**
+Thermodynamic properties (specific heat $C_p^\circ$, enthalpy $H^\circ$, and entropy $S^\circ$) for each species are evaluated using the NASA 9-coefficients polynomial fit. The coefficients are partitioned into three temperature intervals (200K–1000K, 1000K–6000K, and 6000K–20000K) sourced from the NASA CEA database (derived from `thermo.inp`).  
 
-  $$
-  \frac{S^\circ}{R} = -\frac{a_1}{2} T^{-2} - a_2 T^{-1} + a_3 \ln T + a_4 T + \frac{a_5}{2} T^2 + \frac{a_6}{3} T^3 + \frac{a_7}{4} T^4 + b_2
-  $$
+The non-dimensional equations are:  
 
-- **Gibbs Free Energy**
+-   **Specific Heat**:  
+    $$\frac{C_p^\circ}{R} = a_1 T^{-2} + a_2 T^{-1} + a_3 + a_4 T + a_5 T^2 + a_6 T^3 + a_7 T^4$$
 
-  $$
-  G^\circ = RT \left( \frac{H^\circ}{RT} - \frac{S^\circ}{R} \right)
-  $$
+-   **Enthalpy**:  
+    $$\frac{H^\circ}{RT} = -a_1 T^{-2} + a_2 T^{-1} \ln T + a_3 + \frac{a_4}{2} T + \frac{a_5}{3} T^2 + \frac{a_6}{4} T^3 + \frac{a_7}{5} T^4 + \frac{b_1}{T}$$
 
-Where $a_1, \dots, a_7$ are the polynomial coefficients, and $b_1, b_2$ are integration constants. These parameters are stored in `src/mod_constants.f90`.
+-   **Entropy**:  
+    $$\frac{S^\circ}{R} = -\frac{a_1}{2} T^{-2} - a_2 T^{-1} + a_3 \ln T + a_4 T + \frac{a_5}{2} T^2 + \frac{a_6}{3} T^3 + \frac{a_7}{4} T^4 + b_2$$
 
-## Chemical Equilibrium System
+-   **Gibbs Free Energy**:  
+    $$G^\circ = RT \left( \frac{H^\circ}{RT} - \frac{S^\circ}{R} \right)$$
 
-The plasma is assumed to consist of 11 species:
+Where $a_1 \dots a_7$ are the polynomial coefficients, and $b_1, b_2$ are integration constants. These parameters are stored in [src/mod<sub>constants.f90</sub>](src/mod_constants.f90).  
 
-| Index | Species Name | Type | Description |
-|-------|--------------|------|-------------|
-| 1 | O | Atom | Oxygen Atom |
-| 2 | N | Atom | Nitrogen Atom |
-| 3 | NO | Compound | Nitric Oxide |
-| 4 | O2 | Molecule | Oxygen Molecule |
-| 5 | N2 | Molecule | Nitrogen Molecule |
-| 6 | O+ | Ion | Oxygen Ion |
-| 7 | N+ | Ion | Nitrogen Ion |
-| 8 | O2+ | Ionized Mol | Oxygen Molecular Ion |
-| 9 | N2+ | Ionized Mol | Nitrogen Molecular Ion |
-| 10 | NO+ | Ion | Nitric Oxide Ion |
-| 11 | e- | Atom | Electron |
 
-### Governing Equations
+<a id="orgf40e2bb"></a>
 
-To find the equilibrium composition (partial pressures $P_i$), we solve a system of 11 equations consisting of 8 chemical equilibrium constraints, 1 total pressure constraint, 1 charge neutrality equa[...]
+# Chemical Equilibrium System
 
-1. **Oxygen Cleavage:** $O_2 \rightleftharpoons 2O$
+The plasma is assumed to consist of 11 species:  
 
-   $$
-   K_{p, O_2} P_{O_2} = P_O^2
-   $$
+| Index | Species Name | Type        | Description            |
+|----- |------------ |----------- |---------------------- |
+| 1     | O            | Atom        | Oxygen Atom            |
+| 2     | N            | Atom        | Nitrogen Atom          |
+| 3     | NO           | Compound    | Nitric Oxide           |
+| 4     | O2           | Molecule    | Oxygen Molecule        |
+| 5     | N2           | Molecule    | Nitrogen Molecule      |
+| 6     | O+           | Ion         | Oxygen Ion             |
+| 7     | N+           | Ion         | Nitrogen Ion           |
+| 8     | O2+          | Ionized Mol | Oxygen Molecular Ion   |
+| 9     | N2+          | Ionized Mol | Nitrogen Molecular Ion |
+| 10    | NO+          | Ionized Mol | Nitric Oxide Ion       |
+| 11    | e-           | Atom        | Electron               |
 
-2. **Nitrogen Cleavage:** $N_2 \rightleftharpoons 2N$
 
-   $$
-   K_{p, N_2} P_{N_2} = P_N^2
-   $$
+<a id="org6e7bfd0"></a>
 
-3. **NO Dissociation:** $NO \rightleftharpoons N + O$
+## Governing Equations
 
-   $$
-   K_{p, NO} P_{NO} = P_N P_O
-   $$
+To find the equilibrium composition (partial pressures $P_i$), we solve a system of 11 equations consisting of 8 chemical equilibrium constraints, 1 total pressure constraint, 1 charge neutrality constraint, and 1 mass conservation constraint for the Nitrogen-to-Oxygen ratio.  
 
-4. **Oxygen Ionization:** $O^+ + e^- \rightleftharpoons O$
+1.  **Oxygen Cleavage**: $O_2 \rightleftharpoons 2O$  
+    $$K_{p, \text{O}_2} P_{\text{O}_2} = P_{\text{O}}^2$$
+2.  **Nitrogen Cleavage**: $N_2 \rightleftharpoons 2N$  
+    $$K_{p, \text{N}_2} P_{\text{N}_2} = P_{\text{N}}^2$$
+3.  **NO Dissociation**: $NO \rightleftharpoons N + O$  
+    $$K_{p, \text{NO}} P_{\text{NO}} = P_{\text{N}} P_{\text{O}}$$
+4.  **Oxygen Ionization**: $O^+ + e^- \rightleftharpoons O$  
+    $$K_{p, \text{O}^+} P_{\text{O}^+} P_{e^-} = P_{\text{O}}$$
+5.  **Nitrogen Ionization**: $N^+ + e^- \rightleftharpoons N$  
+    $$K_{p, \text{N}^+} P_{\text{N}^+} P_{e^-} = P_{\text{N}}$$
+6.  **Oxygen Molecule Ionization**: $O_2^+ + e^- \rightleftharpoons 2O$  
+    $$K_{p, \text{O}_2^+} P_{\text{O}_2^+} P_{e^-} = P_{\text{O}}^2$$
+7.  **Nitrogen Molecule Ionization**: $N_2^+ + e^- \rightleftharpoons 2N$  
+    $$K_{p, \text{N}_2^+} P_{\text{N}_2^+} P_{e^-} = P_{\text{N}}^2$$
+8.  **NO Ionization**: $NO^+ + e^- \rightleftharpoons N + O$  
+    $$K_{p, \text{NO}^+} P_{\text{NO}^+} P_{e^-} = P_{\text{N}} P_{\text{O}}$$
+9.  **Total Pressure Constraint**:  
+    $$P_{\text{tot}} = \sum_{i=1}^{11} P_i$$
+10. **Charge Neutrality**:  
+    $$P_{e^-} = P_{\text{O}^+} + P_{\text{N}^+} + P_{\text{O}_2^+} + P_{\text{N}_2^+} + P_{\text{NO}^+}$$
+11. **Nitrogen-to-Oxygen Ratio** (mass conservation, approx. 78:21):  
+    $$\frac{N_{\text{N}}}{N_{\text{O}}} = \frac{78}{21} \implies 78 \cdot N_{\text{O}} - 21 \cdot N_{\text{N}} = 0$$  
+    Where $N_{\text{O}}$ and $N_{\text{N}}$ are the total abundance of oxygen and nitrogen atoms across all species.
 
-   $$
-   K_{p, O^+} P_{O^+} P_{e^-} = P_O
-   $$
 
-5. **Nitrogen Ionization:** $N^+ + e^- \rightleftharpoons N$
+<a id="org55d34fe"></a>
 
-   $$
-   K_{p, N^+} P_{N^+} P_{e^-} = P_N
-   $$
+# Numerical Solver
 
-6. **Oxygen Molecule Ionization:** $O_2^+ + e^- \rightleftharpoons 2O$
+To handle the large variation in partial pressures (which can drop to $10^{-30}$ atm or lower), the solver computes the log-transformed pressures:  
+$$x_i = \ln\left(P_i / P_{\text{atm}}\right)$$  
 
-   $$
-   K_{p, O_2^+} P_{O_2^+} P_{e^-} = P_O^2
-   $$
+This transformation ensures that $P_i$ remains strictly positive and improves the conditioning of the Jacobian matrix.  
 
-7. **Nitrogen Molecule Ionization:** $N_2^+ + e^- \rightleftharpoons 2N$
 
-   $$
-   K_{p, N_2^+} P_{N_2^+} P_{e^-} = P_N^2
-   $$
+<a id="org1d258a3"></a>
 
-8. **NO Ionization:** $NO^+ + e^- \rightleftharpoons N + O$
+## Continuation Method & OpenMP Parallelization
 
-   $$
-   K_{p, NO^+} P_{NO^+} P_{e^-} = P_N P_O
-   $$
+To drastically accelerate convergence, the solver employs a ****continuation method****: after the first temperature step, the converged solution from the previous temperature is used as the initial guess for the next. This reduces the required Newton-Raphson iterations to just 1-3 per temperature step.  
+Furthermore, the outer loop over varying atmospheric pressures is completely parallelized using ****OpenMP****, distributing the independent computation paths across all available CPU cores.  
 
-9. **Total Pressure Constraint**
 
-   $$
-   P_{\text{tot}} = \sum_{i=1}^{11} P_i
-   $$
+<a id="orgdbcd308"></a>
 
-10. **Charge Neutrality**
+## Damped Newton-Raphson Method
 
-    $$
-    P_{e^-} = P_{O^+} + P_{N^+} + P_{O_2^+} + P_{N_2^+} + P_{NO^+}
-    $$
+At each iteration $k$, the linear system is solved for the correction vector $\Delta x$:  
+$$J(x^{(k)}) \Delta x = -f(x^{(k)})$$  
+Using the LAPACK double-precision general solver (`dgesv`).  
 
-11. **Nitrogen-to-Oxygen Ratio** (mass conservation, approx. 78:21)
 
-    $$
-    \frac{N_N}{N_O} = \frac{78}{21} \implies 78 \cdot N_O - 21 \cdot N_N = 0
-    $$
+<a id="org2b4b5e5"></a>
 
-    Where $N_O$ and $N_N$ are the total abundance of oxygen and nitrogen atoms across all species.
+## Backtracking Line Search (Armijo Rule)
 
-## Numerical Solver
+To prevent divergence when far from the solution, a backtracking line search is performed:  
+$$x^{(k+1)} = x^{(k)} + \alpha \Delta x$$  
+where the step size $\alpha$ starts at $1.0$ and is successively halved ($\alpha \leftarrow 0.5 \alpha$) until the Residual Sum of Squares (RSS) decreases sufficiently:  
+$$\text{RSS}(x^{(k)} + \alpha \Delta x) \le \text{RSS}(x^{(k)}) - c_1 \alpha \|f(x^{(k)})\|^2$$  
+with $c_1 = 10^{-4}$.  
 
-To handle the large variation in partial pressures (which can drop to $10^{-30}$ atm or lower), the solver computes the log-transformed pressures:
 
-$$
-x_i = \ln\left(P_i / P_{\text{atm}}\right)
-$$
+<a id="org3fea0e2"></a>
 
-This transformation ensures that $P_i$ remains strictly positive and improves the conditioning of the Jacobian matrix.
-
-### Continuation Method & OpenMP Parallelization
-
-To drastically accelerate convergence, the solver employs a continuation method: after the first temperature step, the converged solution from the previous temperature is used as the initial guess for[...]
-
-Furthermore, the outer loop over varying atmospheric pressures is completely parallelized using OpenMP, distributing the independent computation paths across all available CPU cores.
-
-### Damped Newton-Raphson Method
-
-At each iteration $k$, the linear system is solved for the correction vector $\Delta x$:
-
-$$
-J(x^{(k)}) \Delta x = -f(x^{(k)})
-$$
-
-Using the LAPACK double-precision general solver (`dgesv`).
-
-### Backtracking Line Search (Armijo Rule)
-
-To prevent divergence when far from the solution, a backtracking line search is performed:
-
-$$
-x^{(k+1)} = x^{(k)} + \alpha \Delta x
-$$
-
-where the step size $\alpha$ starts at $1.0$ and is successively halved ($\alpha \leftarrow 0.5 \alpha$) until the Residual Sum of Squares (RSS) decreases sufficiently:
-
-$$
-\text{RSS}(x^{(k)} + \alpha \Delta x) \le \text{RSS}(x^{(k)}) - c_1 \alpha \|f(x^{(k)})\|^2
-$$
-
-with $c_1 = 10^{-4}$.
-
-## Directory Structure
+# Directory Structure
 
 ```text
 Gibbs/
@@ -195,70 +172,105 @@ Gibbs/
 └── output/                 # Destination for generated data tables (*.dat)
 ```
 
-## Building and Running
 
-### Prerequisites
+<a id="org170e24b"></a>
 
-- Intel Fortran Compiler (`ifx`)
-- Intel oneAPI Math Kernel Library (MKL) for LAPACK support
+# Building and Running
 
-### Compiling
 
-To build the executable in release mode (default):
+<a id="orgebe7539"></a>
+
+## Prerequisites
+
+-   Intel Fortran Compiler (`ifx`)
+-   Intel oneAPI Math Kernel Library (MKL) for LAPACK support
+
+
+<a id="org3ff2fec"></a>
+
+## Compiling
+
+To build the executable in release mode (default):  
 
 ```bash
 make
 ```
 
-To build with debug checks and symbols:
+To build with debug checks and symbols:  
 
 ```bash
 make BUILD=debug
 ```
 
-### Running the Simulation
 
-Run the compiled binary:
+<a id="orgbaee32f"></a>
+
+## Running the Simulation
+
+Run the compiled binary:  
 
 ```bash
 ./bin/calc_pressure
 ```
 
-This will calculate:
+This will calculate:  
 
-1. The equilibrium constants for all species at different temperatures (outputted to `output/k_test.dat`).
-2. The partial pressures (mole fractions) for atmospheric pressures of 1.0, 0.1, and 0.01 atm across temperatures 298.15 K to 20,000 K. The results are automatically saved to dynamically named, struct[...]
+1.  The equilibrium constants for all species at different temperatures (outputted to `output/k_test.dat`).
+2.  The partial pressures (mole fractions) for atmospheric pressures of 1.0, 0.1, and 0.01 atm across temperatures 298.15 K to 20,000 K. The results are automatically saved to dynamically named, separated output files incorporating the pressure and gas ratio (e.g., `output/1p00atm78v21.dat`, `output/0p10atm78v21.dat`).
 
-### Plotting Results
 
-You can plot the mole fraction distribution as a function of temperature using the provided Gnuplot script:
+<a id="org90a709f"></a>
+
+## Plotting Results
+
+You can plot the mole fraction distribution as a function of temperature using the provided Gnuplot script:  
 
 ```bash
 cd output
 gnuplot ../experiments/gnuplot/test.gp
 ```
 
-This plots the species distribution over the temperature range [0:20000] K.
+This plots the species distribution over the temperature range [0:20000] K.  
 
-## Planned Features & Future Enhancements
 
-### Object-Oriented Refactoring & Encapsulation
+<a id="org0d4a069"></a>
 
-Refactor the Newton-Raphson solver and backtracking line search routines into clean Fortran modules. Target complete encapsulation of solver parameters, Jacobians, and residual state variables into de[...]
+# Planned Features & Future Enhancements
 
-### Solver Customization
+The following features and improvements are planned for future releases:  
 
-- Implement configurable convergence tolerance and maximum iteration limits.
-- Allow swapping or selecting between different iterative schemes (e.g. standard Newton-Raphson vs. Damped Newton-Raphson with backtracking line search).
 
-### Dynamic Gas Composition
+<a id="org8b04753"></a>
 
-- Allow custom gas mixture ratios (e.g. arbitrary $N_2$ to $O_2$ concentrations) to be passed via preprocessor definitions (e.g. `-Dratio_N=...`) at compile time.
+## Object-Oriented Refactoring & Encapsulation
 
-### Output Formatting
+Refactor the Newton-Raphson solver and backtracking line search routines into clean Fortran modules. Target complete encapsulation of solver parameters, Jacobians, and residual state variables in object-oriented structures (derived types) to reduce global/module variables.  
 
-- Add descriptive column headers (chemical species names) to the first line of the output data files and adapt the Gnuplot script to read columns dynamically.
 
-### Logging and Diagnostics
+<a id="orgcf7a1c3"></a>
 
-- Route status/convergence warnings and LAPACK `dgesv` solver errors directly to `stderr` or a dedicated run log file for better monitoring.
+## Solver Customization
+
+-   Implement configurable convergence tolerance and maximum iteration limits.
+-   Allow swapping or selecting between different iterative schemes (e.g., standard Newton-Raphson vs. Damped Newton-Raphson with backtracking line search).
+
+
+<a id="org5e070d1"></a>
+
+## Dynamic Gas Composition
+
+-   Allow custom gas mixture ratios (e.g. arbitrary $N_2$ to $O_2$ concentrations) to be passed via preprocessor definitions (e.g. \`-Dratio<sub>N</sub>=&#x2026;\`) at compile time.
+
+
+<a id="org257a155"></a>
+
+## Output Formatting
+
+-   Add descriptive column headers (chemical species names) to the first line of the output data files and adapt the Gnuplot script to read columns dynamically.
+
+
+<a id="orgc6657b0"></a>
+
+## Logging and Diagnostics
+
+-   Route status/convergence warnings and LAPACK `dgesv` solver errors directly to `stderr` or a dedicated run log file for better monitoring.
